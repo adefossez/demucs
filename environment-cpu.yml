@@ -10,6 +10,7 @@ dependencies:
   - pytorch>=1.8.1
   - torchaudio>=0.8
   - tqdm>=4.36
+  - numpy<2.0
   - pip
   - pip:
     - diffq>=0.2
