@@ -8,40 +8,78 @@
 import torch as th
 
 
-def spectro(x, n_fft=512, hop_length=None, pad=0):
+def spectro(x, n_fft=512, hop_length=None, pad=0, onnx_exportable=False):
     *other, length = x.shape
     x = x.reshape(-1, length)
     is_mps_xpu = x.device.type in ['mps', 'xpu']
     if is_mps_xpu:
         x = x.cpu()
-    z = th.stft(x,
-                n_fft * (1 + pad),
-                hop_length or n_fft // 4,
-                window=th.hann_window(n_fft).to(x),
-                win_length=n_fft,
-                normalized=True,
-                center=True,
-                return_complex=True,
-                pad_mode='reflect')
-    _, freqs, frame = z.shape
-    return z.view(*other, freqs, frame)
+    
+    if onnx_exportable:
+        z = th.view_as_real(
+            th.stft(x,
+                    n_fft * (1 + pad),
+                    hop_length or n_fft // 4,
+                    window=th.hann_window(n_fft).to(x),
+                    win_length=n_fft,
+                    normalized=True,
+                    center=True,
+                    return_complex=True,
+                    pad_mode='reflect')
+        )   # Now z will return 1 more dimension - last dimension will be 2 now
+        _, freqs, frame, dim = z.shape
+        assert dim == 2, "STFT should return complex numbers"
+        return z.view(*other, freqs, frame, dim)
+    else:
+        z = th.stft(x,
+                    n_fft * (1 + pad),
+                    hop_length or n_fft // 4,
+                    window=th.hann_window(n_fft).to(x),
+                    win_length=n_fft,
+                    normalized=True,
+                    center=True,
+                    return_complex=True,
+                    pad_mode='reflect')
+        _, freqs, frame = z.shape
+        return z.view(*other, freqs, frame)
 
 
-def ispectro(z, hop_length=None, length=None, pad=0):
-    *other, freqs, frames = z.shape
-    n_fft = 2 * freqs - 2
-    z = z.view(-1, freqs, frames)
-    win_length = n_fft // (1 + pad)
-    is_mps_xpu = z.device.type in ['mps', 'xpu']
-    if is_mps_xpu:
-        z = z.cpu()
-    x = th.istft(z,
-                 n_fft,
-                 hop_length,
-                 window=th.hann_window(win_length).to(z.real),
-                 win_length=win_length,
-                 normalized=True,
-                 length=length,
-                 center=True)
+def ispectro(z, hop_length=None, length=None, pad=0, onnx_exportable=False):
+    if onnx_exportable:
+        # B, S, -1, Fr, T  (complex)      ----->     # B, S, -1, Fr, T, 2 shape
+        *other, freqs, frames, dim = z.shape   # dim is 2
+        assert dim == 2, "iSTFT should receive complex numbers"    
+        n_fft = 2 * freqs - 2
+        z = z.view(-1, freqs, frames, dim)
+        win_length = n_fft // (1 + pad)
+        is_mps_xpu = z.device.type in ['mps', 'xpu']
+        if is_mps_xpu:
+            z = z.cpu()
+        z = th.view_as_complex(z)  # Convert to complex tensor
+        x = th.istft(z,
+                    n_fft,
+                    hop_length,
+                    window=th.hann_window(win_length).to(z.real),
+                    win_length=win_length,
+                    normalized=True,
+                    length=length,
+                    center=True)
+    else:
+        *other, freqs, frames = z.shape
+        n_fft = 2 * freqs - 2
+        z = z.view(-1, freqs, frames)
+        win_length = n_fft // (1 + pad)
+        is_mps_xpu = z.device.type in ['mps', 'xpu']
+        if is_mps_xpu:
+            z = z.cpu()
+        x = th.istft(z,
+                    n_fft,
+                    hop_length,
+                    window=th.hann_window(win_length).to(z.real),
+                    win_length=win_length,
+                    normalized=True,
+                    length=length,
+                    center=True)
+    
     _, length = x.shape
     return x.view(*other, length)
