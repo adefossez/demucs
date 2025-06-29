@@ -1,3 +1,13 @@
+# Copyright (C) 2025 Mixxx Development Team
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+# First author is Anmol Mishra.
+"""
+Test for the HTDemucs model ONNX export branch functionality.
+"""
+
 from demucs.htdemucs import HTDemucs
 import pytest
 import torch

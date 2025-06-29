@@ -1,4 +1,5 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (C) 2025 Mixxx Development Team.
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -451,15 +452,12 @@ class HTDemucs(nn.Module):
         if self.onnx_exportable:
             z = F.pad(z, (0, 0, 0, 0, 0, 1))  # add 0 padding for the last dim
             z = F.pad(z, (0, 0, 2, 2))  # add 0 padding for the last dim
-            pad = hl // 2 * 3
-            le = hl * int(math.ceil(length / hl)) + 2 * pad
-            x = ispectro(z, hl, length=le, onnx_exportable=True)
         else:
             z = F.pad(z, (0, 0, 0, 1))
             z = F.pad(z, (2, 2))
-            pad = hl // 2 * 3
-            le = hl * int(math.ceil(length / hl)) + 2 * pad
-            x = ispectro(z, hl, length=le)
+        pad = hl // 2 * 3
+        le = hl * int(math.ceil(length / hl)) + 2 * pad
+        x = ispectro(z, hl, length=le, onnx_exportable=self.onnx_exportable)
         x = x[..., pad: pad + length]
         return x
 
@@ -474,13 +472,12 @@ class HTDemucs(nn.Module):
                 B, C, Fr, T = z.shape
                 m = torch.view_as_real(z).permute(0, 1, 4, 2, 3)
             m = m.reshape(B, C * 2, Fr, T)
-        else:
-            if self.onnx_exportable:
-                real = z[..., 0]
-                imag = z[..., 1]
-                m = torch.sqrt(real**2 + imag**2)  # for magnitude
-            else:         
-                m = z.abs()
+        elif self.onnx_exportable:
+            real = z[..., 0]
+            imag = z[..., 1]
+            m = torch.sqrt(real**2 + imag**2)  # for magnitude
+        else:         
+            m = z.abs()
         return m
 
     def _mask(self, z, m):
