@@ -7,6 +7,7 @@
 """Conveniance wrapper to perform STFT and iSTFT"""
 
 import torch as th
+from .stft import demucs_stft
 
 
 def spectro(x, n_fft=512, hop_length=None, pad=0, onnx_exportable=False):
@@ -17,17 +18,7 @@ def spectro(x, n_fft=512, hop_length=None, pad=0, onnx_exportable=False):
         x = x.cpu()
     
     if onnx_exportable:
-        z = th.view_as_real(
-            th.stft(x,
-                    n_fft * (1 + pad),
-                    hop_length or n_fft // 4,
-                    window=th.hann_window(n_fft).to(x),
-                    win_length=n_fft,
-                    normalized=True,
-                    center=True,
-                    return_complex=True,
-                    pad_mode='reflect')
-        )   # Now z will return 1 more dimension - last dimension will be 2 now
+        z = demucs_stft(x.view(-1, 1, length))    # z will return 1 more dimension - z.size(-1) will be 2
         _, freqs, frame, dim = z.shape
         assert dim == 2, "STFT should return complex numbers"
         return z.view(*other, freqs, frame, dim)
