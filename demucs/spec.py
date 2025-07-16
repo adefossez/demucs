@@ -8,6 +8,7 @@
 
 import torch as th
 from .stft import demucs_stft
+from .istft import demucs_istft
 
 
 def spectro(x, n_fft=512, hop_length=None, pad=0, onnx_exportable=False):
@@ -47,15 +48,7 @@ def ispectro(z, hop_length=None, length=None, pad=0, onnx_exportable=False):
         is_mps_xpu = z.device.type in ['mps', 'xpu']
         if is_mps_xpu:
             z = z.cpu()
-        z = th.view_as_complex(z)  # Convert to complex tensor
-        x = th.istft(z,
-                     n_fft,
-                     hop_length,
-                     window=th.hann_window(win_length).to(z.real),
-                     win_length=win_length,
-                     normalized=True,
-                     length=length,
-                     center=True)
+        x = demucs_istft(z[..., 0], z[..., 1], length=length)
         _, length = x.shape
         return x.view(*other, length)
 
