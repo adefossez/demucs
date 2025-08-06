@@ -14,3 +14,6 @@ Session.vim
 /misc
 /mdx
 .mypy_cache
+*.onnx
+*.ort
+*.config
