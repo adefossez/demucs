@@ -3,11 +3,13 @@
 ## Convert PyTorch model to ONNX and ORT
 
 Convert Demucs PyTorch model to ONNX:
-```
-$ python ./scripts/convert-pth-to-onnx.py ./scripts/demucs-onnx
+
+```python
+python ./scripts/convert-pth-to-onnx.py ./onnx-models
 ```
 
-Then, convert ONNX to ORT:
-```
-$ ./scripts/convert-model-to-ort.sh 
+Optionally, convert ONNX model to ORT:
+
+```python
+python -m onnxruntime.tools.convert_onnx_models_to_ort ./onnx-models --enable_type_reduction 
 ```
