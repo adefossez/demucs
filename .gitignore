@@ -10,8 +10,10 @@ Session.vim
 /release
 /release_models
 /separated
-/tests
 /trash
 /misc
 /mdx
 .mypy_cache
+*.onnx
+*.ort
+*.config

@@ -1,4 +1,5 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (C) 2025 Mixxx Development Team.
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -130,6 +131,7 @@ class HTDemucs(nn.Module):
         samplerate=44100,
         segment=10,
         use_train_segment=True,
+        onnx_exportable=False,
     ):
         """
         Args:
@@ -239,6 +241,7 @@ class HTDemucs(nn.Module):
         self.wiener_iters = wiener_iters
         self.end_iters = end_iters
         self.freq_emb = None
+        self.onnx_exportable = onnx_exportable
         assert wiener_iters == end_iters
 
         self.encoder = nn.ModuleList()
@@ -434,18 +437,27 @@ class HTDemucs(nn.Module):
         pad = hl // 2 * 3
         x = pad1d(x, (pad, pad + le * hl - x.shape[-1]), mode="reflect")
 
-        z = spectro(x, nfft, hl)[..., :-1, :]
-        assert z.shape[-1] == le + 4, (z.shape, x.shape, le)
-        z = z[..., 2: 2 + le]
+        if self.onnx_exportable:
+            z = spectro(x, nfft, hl, onnx_exportable=True)[..., :-1, :, :]    # adding one more dimension
+            assert z.shape[-2] == le + 4, (z.shape, x.shape, le) # from -1 to -2
+            z = z[..., 2: 2 + le, :]  # adding one more dimension
+        else:
+            z = spectro(x, nfft, hl)[..., :-1, :]
+            assert z.shape[-1] == le + 4, (z.shape, x.shape, le)
+            z = z[..., 2: 2 + le]
         return z
 
     def _ispec(self, z, length=None, scale=0):
         hl = self.hop_length // (4**scale)
-        z = F.pad(z, (0, 0, 0, 1))
-        z = F.pad(z, (2, 2))
+        if self.onnx_exportable:
+            z = F.pad(z, (0, 0, 0, 0, 0, 1))  # add 0 padding for the last dim
+            z = F.pad(z, (0, 0, 2, 2))  # add 0 padding for the last dim
+        else:
+            z = F.pad(z, (0, 0, 0, 1))
+            z = F.pad(z, (2, 2))
         pad = hl // 2 * 3
         le = hl * int(math.ceil(length / hl)) + 2 * pad
-        x = ispectro(z, hl, length=le)
+        x = ispectro(z, hl, length=le, onnx_exportable=self.onnx_exportable)
         x = x[..., pad: pad + length]
         return x
 
@@ -453,10 +465,18 @@ class HTDemucs(nn.Module):
         # return the magnitude of the spectrogram, except when cac is True,
         # in which case we just move the complex dimension to the channel one.
         if self.cac:
-            B, C, Fr, T = z.shape
-            m = torch.view_as_real(z).permute(0, 1, 4, 2, 3)
+            if self.onnx_exportable:
+                B, C, Fr, T, dim = z.shape  # dim should be 2, adding one more dimension
+                m = z.permute(0, 1, 4, 2, 3) # torch.view_as_real(z) changed to z 
+            else:
+                B, C, Fr, T = z.shape
+                m = torch.view_as_real(z).permute(0, 1, 4, 2, 3)
             m = m.reshape(B, C * 2, Fr, T)
-        else:
+        elif self.onnx_exportable:
+            real = z[..., 0]
+            imag = z[..., 1]
+            m = torch.sqrt(real**2 + imag**2)  # for magnitude
+        else:         
             m = z.abs()
         return m
 
@@ -467,8 +487,12 @@ class HTDemucs(nn.Module):
         if self.cac:
             B, S, C, Fr, T = m.shape
             out = m.view(B, S, -1, 2, Fr, T).permute(0, 1, 2, 4, 5, 3)
-            out = torch.view_as_complex(out.contiguous())
+            if self.onnx_exportable:
+                out = out.contiguous()  # out shape is (B, S, -1, Fr, T, 2) shape
+            else:
+                out = torch.view_as_complex(out.contiguous())   # out shape is (B, S, -1, Fr, T)  (complex)
             return out
+        # TODO: Modify all the below paths for the new shape
         if self.training:
             niters = self.end_iters
         if niters < 0:
