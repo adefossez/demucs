@@ -7,12 +7,19 @@
 
     from demucs.client import Client
 
+    # Single endpoint
     c = Client("http://localhost:8765")
+
+    # Pool of endpoints discovered from a `demucs-pool` registry folder;
+    # one worker is picked uniformly at random per request.
+    c = Client("./demucs_pool/endpoints")
+
     stems = c.separate("song.mp3")                       # filename
     stems = c.separate(wav, samplerate=44100)            # torch.Tensor
     # stems: dict[str, torch.Tensor], each (channels, samples) float32
 """
 import base64
+import random
 import tempfile
 import typing as tp
 from pathlib import Path
@@ -23,16 +30,74 @@ import torchaudio as ta
 
 
 _SourceT = tp.Union[str, Path, "torch.Tensor"]
+_TargetT = tp.Union[str, Path]
 
 
 class Client:
-    def __init__(self, base_url: str = "http://localhost:8765",
-                 timeout: float = 600.0):
-        self.base_url = base_url.rstrip("/")
+    """HTTP client for demucs-server, with optional folder-based pool discovery.
+
+    ``target`` is either a single URL (``"http://host:port"``) or a path to a
+    directory of ``*.txt`` files each containing ``host:port`` (the format
+    produced by ``demucs-pool``). In folder mode the directory is re-read on
+    every request, so workers can come and go between calls.
+    """
+
+    def __init__(
+        self,
+        target: _TargetT = "http://localhost:8765",
+        *,
+        scheme: str = "http",
+        timeout: float = 600.0,
+        rng: tp.Optional[random.Random] = None,
+    ):
+        target_s = str(target)
+        if isinstance(target, str) and target_s.startswith(("http://", "https://")):
+            self._dir: tp.Optional[Path] = None
+            self._fixed_url: tp.Optional[str] = target_s.rstrip("/")
+        else:
+            self._dir = Path(target_s)
+            self._fixed_url = None
+        self.scheme = scheme
         self.timeout = timeout
+        self._rng = rng or random.Random()
+
+    def endpoints(self) -> tp.List[str]:
+        """Currently visible endpoint URLs, re-read from disk in folder mode."""
+        if self._fixed_url is not None:
+            return [self._fixed_url]
+        assert self._dir is not None
+        if not self._dir.is_dir():
+            raise FileNotFoundError(f"endpoint folder not found: {self._dir}")
+        urls = []
+        for f in sorted(self._dir.glob("*.txt")):
+            hostport = f.read_text().strip()
+            if hostport:
+                urls.append(f"{self.scheme}://{hostport}")
+        if not urls:
+            raise RuntimeError(f"no endpoints registered under {self._dir}")
+        return urls
+
+    def _pick_url(self) -> str:
+        if self._fixed_url is not None:
+            return self._fixed_url
+        assert self._dir is not None
+        # In folder mode we want a fresh pick per call, so just list and choose.
+        # We don't read every file's bytes — pick a filename, then read that one.
+        if not self._dir.is_dir():
+            raise FileNotFoundError(f"endpoint folder not found: {self._dir}")
+        files = sorted(self._dir.glob("*.txt"))
+        if not files:
+            raise RuntimeError(f"no endpoints registered under {self._dir}")
+        f = self._rng.choice(files)
+        hostport = f.read_text().strip()
+        if not hostport:
+            raise RuntimeError(f"empty endpoint file: {f}")
+        return f"{self.scheme}://{hostport}"
 
     def health(self) -> dict:
-        r = requests.get(f"{self.base_url}/health", timeout=self.timeout)
+        """Health from a randomly-picked endpoint (or the only one)."""
+        url = self._pick_url()
+        r = requests.get(f"{url}/health", timeout=self.timeout)
         r.raise_for_status()
         return r.json()
 
@@ -64,8 +129,9 @@ class Client:
         if format == "mp3":
             params["mp3_bitrate"] = str(mp3_bitrate)
 
+        url = self._pick_url()
         r = requests.post(
-            f"{self.base_url}/separate",
+            f"{url}/separate",
             files={"file": (filename, file_bytes)},
             params=params,
             timeout=self.timeout,

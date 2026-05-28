@@ -1,0 +1,29 @@
+# Example config for `demucs-pool <this-file>`.
+# Override any defaults below; both [slurm] and [server] sections are optional.
+
+[slurm]
+# Slurm allocation. Each `nodes` value submits one independent allocation;
+# each allocation runs `tasks_per_node` srun tasks = one demucs-server per
+# GPU. Defaulting to 8 tasks/node means Slurm grants us the whole 8-GPU
+# node, so no other job can fragment around us.
+partition       = "priority"
+time            = 10080         # minutes
+nodes           = 2             # number of node allocations
+tasks_per_node  = 8             # one server per GPU
+mem_per_gpu     = 50            # GB (total mem = mem_per_gpu * tasks_per_node)
+cpus_per_gpu    = 8
+job_name        = "demucs-pool"
+# account     = "..."           # uncomment if your cluster requires one
+# qos         = "..."
+# constraint  = "h100"          # node feature constraint
+# additional_parameters = { "exclusive" = "user" }   # raw sbatch passthrough
+
+[server]
+# Per-server flags. Each task picks port = port_base + SLURM_LOCALID, so
+# 8 tasks on one node bind 8765..8772 by default.
+model           = "htdemucs"
+# repo          = "/path/to/local/repo"   # only if you keep models locally
+max_batch       = 64
+batch_wait_ms   = 100.0
+overlap         = 0.25
+port_base       = 8765

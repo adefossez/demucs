@@ -76,7 +76,6 @@ def _worker(server_cfg: ServerConfig, endpoints_dir: Path) -> None:
     from .server import _build_engine, create_app
 
     local_rank = int(os.environ.get("SLURM_LOCALID", "0"))
-    global_rank = int(os.environ.get("SLURM_PROCID", str(os.getpid())))
     port = server_cfg.port_base + local_rank
 
     # Slurm exposes only the bound GPU via CUDA_VISIBLE_DEVICES, so cuda:0
@@ -93,12 +92,16 @@ def _worker(server_cfg: ServerConfig, endpoints_dir: Path) -> None:
 
     host = socket.gethostbyname(socket.gethostname())
     endpoint = f"{host}:{port}"
+    # SLURM_PROCID resets per-allocation, so it collides across nodes when the
+    # pool spans several sbatch submissions. host_port is globally unique
+    # (two processes cannot bind the same host+port) and doesn't depend on
+    # any Slurm env var, so it also works in --local mode.
     endpoints_dir.mkdir(parents=True, exist_ok=True)
-    (endpoints_dir / f"{global_rank:05d}.txt").write_text(endpoint + "\n")
+    (endpoints_dir / f"{host}_{port}.txt").write_text(endpoint + "\n")
 
     logging.basicConfig(
         level=logging.INFO,
-        format=f"%(asctime)s [rank={global_rank}] %(levelname)s %(name)s %(message)s",
+        format=f"%(asctime)s [{endpoint}] %(levelname)s %(name)s %(message)s",
     )
     logger.info("ready: %s (local_rank=%d, model=%s, device=%s)",
                 endpoint, local_rank, server_cfg.model, args.device)
@@ -162,7 +165,11 @@ def main(argv: tp.Optional[tp.List[str]] = None) -> None:
     # Stale endpoint files from a previous run would mislead us.
     endpoints_dir = args.folder / "endpoints"
     if endpoints_dir.exists():
+        stale = sum(1 for _ in endpoints_dir.glob("*.txt"))
         shutil.rmtree(endpoints_dir)
+        if stale:
+            logger.info("removed %d stale endpoint file(s) from %s",
+                        stale, endpoints_dir)
     endpoints_dir.mkdir(parents=True)
 
     executor = _build_executor(args.folder, config.slurm, args.local)
