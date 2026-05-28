@@ -28,9 +28,9 @@ tests/musdb:
 	musdbconvert tests/tmp tests/musdb
 
 dist:
-	python3 setup.py sdist
+	uv build --sdist
 
 clean:
-	rm -r dist build *.egg-info
+	rm -rf dist build *.egg-info
 
 .PHONY: linter dist test_train test_eval

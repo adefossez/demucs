@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "demucs"
+description = "Music source separation in the waveform domain."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8.0"
+authors = [
+    { name = "Alexandre Défossez", email = "defossez@fb.com" },
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "dora-search",
+    "einops",
+    "julius>=0.2.3",
+    "lameenc>=1.2",
+    "openunmix",
+    "pyyaml",
+    "torch>=1.8.1",
+    "torchaudio>=0.8,<2.2",
+    "tqdm",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+    "dora-search>=0.1.12",
+    "diffq>=0.2.1",
+    "einops",
+    "flake8",
+    "hydra-colorlog>=1.1",
+    "hydra-core>=1.1",
+    "julius>=0.2.3",
+    "lameenc>=1.2",
+    "museval",
+    "mypy",
+    "openunmix",
+    "pyyaml",
+    "submitit",
+    "torch>=1.8.1",
+    "torchaudio>=0.8,<2.2",
+    "tqdm",
+    "treetable",
+    "soundfile>=0.10.3",
+]
+
+[project.urls]
+Homepage = "https://github.com/facebookresearch/demucs"
+
+[project.scripts]
+demucs = "demucs.separate:main"
+
+[tool.hatch.version]
+path = "demucs/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["demucs"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "demucs/",
+    "conf/**/*.yaml",
+    "Makefile",
+    "LICENSE",
+    "README.md",
+    "demucs.png",
+    "outputs.tar.gz",
+    "test.mp3",
+    "requirements.txt",
+    "requirements_minimal.txt",
+    "mypy.ini",
+]
