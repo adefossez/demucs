@@ -24,12 +24,31 @@ dependencies = [
     "openunmix",
     "pyyaml",
     "torch>=1.8.1",
-    "torchaudio>=0.8,<2.2",
+    "torchaudio>=0.8,<3",
     "tqdm",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
+server = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "soundfile>=0.10.3",
+]
+client = [
+    "requests",
+    "soundfile>=0.10.3",
+]
+pool = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "soundfile>=0.10.3",
+    "submitit",
+    "pydantic",
+    "tomli ; python_version < '3.11'",
+]
 dev = [
     "dora-search>=0.1.12",
     "diffq>=0.2.1",
@@ -45,7 +64,7 @@ dev = [
     "pyyaml",
     "submitit",
     "torch>=1.8.1",
-    "torchaudio>=0.8,<2.2",
+    "torchaudio>=0.8,<3",
     "tqdm",
     "treetable",
     "soundfile>=0.10.3",
@@ -56,6 +75,8 @@ Homepage = "https://github.com/facebookresearch/demucs"
 
 [project.scripts]
 demucs = "demucs.separate:main"
+demucs-server = "demucs.server:main"
+demucs-pool = "demucs.pool:main"
 
 [tool.hatch.version]
 path = "demucs/__init__.py"
