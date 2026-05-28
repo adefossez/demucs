@@ -21,10 +21,19 @@ dependencies = [
     "einops",
     "julius>=0.2.3",
     "lameenc>=1.2",
+    # torch <=2.1 imports `pkg_resources` at runtime (via einops/torch_version);
+    # setuptools 81 dropped it. Pin so resolves stay self-consistent.
+    "setuptools<81",
+    # torch 2.1.x was compiled against NumPy 1.x; using NumPy 2 segfaults
+    # `torch.from_numpy`. Lift only if we bump torch >= 2.2.
+    "numpy<2",
     "openunmix",
     "pyyaml",
-    "torch>=1.8.1",
-    "torchaudio>=0.8,<3",
+    # Hard-pinned: torch 2.1.2 is the last release that works with NumPy 1.x
+    # (see numpy<2 above) and the broader demucs stack. Bumping requires
+    # also relaxing setuptools<81 and numpy<2.
+    "torch==2.1.2",
+    "torchaudio==2.1.2",
     "tqdm",
 ]
 dynamic = ["version"]
@@ -60,11 +69,13 @@ dev = [
     "lameenc>=1.2",
     "museval",
     "mypy",
+    "setuptools<81",
+    "numpy<2",
     "openunmix",
     "pyyaml",
     "submitit",
-    "torch>=1.8.1",
-    "torchaudio>=0.8,<3",
+    "torch==2.1.2",
+    "torchaudio==2.1.2",
     "tqdm",
     "treetable",
     "soundfile>=0.10.3",
