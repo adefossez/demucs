@@ -29,56 +29,38 @@ dependencies = [
     "numpy<2",
     "openunmix",
     "pyyaml",
+    "soundfile>=0.10.3",
     # Hard-pinned: torch 2.1.2 is the last release that works with NumPy 1.x
     # (see numpy<2 above) and the broader demucs stack. Bumping requires
     # also relaxing setuptools<81 and numpy<2.
     "torch==2.1.2",
     "torchaudio==2.1.2",
     "tqdm",
-]
-dynamic = ["version"]
-
-[project.optional-dependencies]
-server = [
+    # demucs-server / demucs-pool / demucs.client are exposed as console
+    # scripts (or imported as a library); their runtime deps live here so
+    # `uv run demucs-{server,pool}` resolves without needing --extra.
     "fastapi",
     "uvicorn",
     "python-multipart",
-    "soundfile>=0.10.3",
-]
-client = [
     "requests",
-    "soundfile>=0.10.3",
-]
-pool = [
-    "fastapi",
-    "uvicorn",
-    "python-multipart",
-    "soundfile>=0.10.3",
     "submitit",
     "pydantic",
     "tomli ; python_version < '3.11'",
 ]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+# Dev-only tooling. Runtime deps live in `dependencies` so they're available
+# under `uv run`. Adding `diffq` here as it's only needed for the quantized
+# training recipe, not for inference.
 dev = [
-    "dora-search>=0.1.12",
     "diffq>=0.2.1",
-    "einops",
     "flake8",
     "hydra-colorlog>=1.1",
     "hydra-core>=1.1",
-    "julius>=0.2.3",
-    "lameenc>=1.2",
     "museval",
     "mypy",
-    "setuptools<81",
-    "numpy<2",
-    "openunmix",
-    "pyyaml",
-    "submitit",
-    "torch==2.1.2",
-    "torchaudio==2.1.2",
-    "tqdm",
     "treetable",
-    "soundfile>=0.10.3",
 ]
 
 [project.urls]
