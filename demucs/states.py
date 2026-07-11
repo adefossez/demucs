@@ -15,9 +15,9 @@ import io
 from pathlib import Path
 import warnings
 
-from omegaconf import OmegaConf
-from dora.log import fatal
 import torch
+
+from .utils import fatal
 
 
 def _check_diffq():
@@ -56,7 +56,7 @@ def load_model(path_or_package, strict=False):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             path = path_or_package
-            package = torch.load(path, 'cpu')
+            package = torch.load(path, 'cpu', weights_only=False)
     else:
         raise ValueError(f"Invalid type for {path_or_package}.")
 
@@ -119,6 +119,7 @@ def save_with_checksum(content, path):
 
 
 def serialize_model(model, training_args, quantizer=None, half=True):
+    from omegaconf import OmegaConf
     args, kwargs = model._init_args_kwargs
     klass = model.__class__
 

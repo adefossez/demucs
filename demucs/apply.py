@@ -282,13 +282,14 @@ def apply_model(model: tp.Union[BagOfModels, Model],
                                            callback(_replace_dict(d, ("segment_offset", i)))
                                            if callback else None))
             futures.append((future, offset))
-            offset += segment_length
         if progress:
             futures = tqdm.tqdm(futures, unit_scale=scale, ncols=120, unit='seconds')
         for future, offset in futures:
             try:
                 chunk_out = future.result()  # type: th.Tensor
-            except Exception:
+            except BaseException:
+                # BaseException so that a `KeyboardInterrupt` raised from a callback
+                # to abort the separation also cancels the remaining chunks.
                 pool.shutdown(wait=True, cancel_futures=True)
                 raise
             chunk_length = chunk_out.shape[-1]

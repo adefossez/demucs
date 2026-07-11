@@ -104,7 +104,7 @@ class Solver(object):
         """Reset state of the solver, potentially using checkpoint."""
         if self.checkpoint_file.exists():
             logger.info(f'Loading checkpoint model: {self.checkpoint_file}')
-            package = torch.load(self.checkpoint_file, 'cpu')
+            package = torch.load(self.checkpoint_file, 'cpu', weights_only=False)
             self.model.load_state_dict(package['state'])
             self.optimizer.load_state_dict(package['optimizer'])
             self.history[:] = package['history']
@@ -122,7 +122,7 @@ class Solver(object):
             root = self.folder.parent
             cf = root / str(self.args.continue_from) / name
             logger.info("Loading from %s", cf)
-            package = torch.load(cf, 'cpu')
+            package = torch.load(cf, 'cpu', weights_only=False)
             self.best_state = package['best_state']
             if self.args.continue_best:
                 self.model.load_state_dict(package['best_state'], strict=False)
@@ -331,7 +331,7 @@ class Solver(object):
                 reco = loss**0.5
                 reco = reco.mean(0)
             else:
-                raise ValueError(f"Invalid loss {self.args.loss}")
+                raise ValueError(f"Invalid loss {self.args.optim.loss}")
             weights = torch.tensor(args.weights).to(sources)
             loss = (loss * weights).sum() / weights.sum()
 
@@ -369,11 +369,9 @@ class Solver(object):
             if train:
                 loss.backward()
                 grad_norm = 0
-                grads = []
                 for p in self.model.parameters():
                     if p.grad is not None:
                         grad_norm += p.grad.data.norm()**2
-                        grads.append(p.grad.data)
                 losses['grad'] = grad_norm ** 0.5
                 if args.optim.clip_grad:
                     torch.nn.utils.clip_grad_norm_(
@@ -393,7 +391,7 @@ class Solver(object):
             logprog.update(**logs)
             # Just in case, clear some memory
             del loss, estimate, reco, ms
-            if args.max_batches == idx:
+            if args.max_batches == idx + 1:
                 break
             if self.args.debug and train:
                 break

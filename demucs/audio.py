@@ -4,15 +4,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import json
+import struct
 import subprocess as sp
 from pathlib import Path
 
 import lameenc
 import julius
 import numpy as np
-from . import audio_legacy
 import torch
-import torchaudio as ta
 import typing as tp
 
 from .utils import temp_filenames
@@ -126,10 +125,10 @@ class AudioFile:
 
             sp.run(command, check=True)
             wavs = []
-            for filename in filenames:
+            for stream, filename in zip(streams, filenames):
                 wav = np.fromfile(filename, dtype=np.float32)
                 wav = torch.from_numpy(wav)
-                wav = wav.view(-1, self.channels()).t()
+                wav = wav.view(-1, self.channels(stream)).t()
                 if channels is not None:
                     wav = convert_audio_channels(wav, channels)
                 if target_size is not None:
@@ -216,6 +215,67 @@ def encode_mp3(wav, path, samplerate=44100, bitrate=320, quality=2, verbose=Fals
         f.write(mp3_data)
 
 
+def _pcm_bytes(wav: torch.Tensor, bits_per_sample: int) -> bytes:
+    """Convert a `[C, T]` float tensor to raw interleaved little-endian PCM bytes.
+    24 bits samples are stored over the top bits of an int32, so that the low byte
+    can either be stripped (wav) or truncated by the encoder (ffmpeg flac)."""
+    frames = wav.clamp(-1, 1).t().contiguous().cpu().numpy()
+    if bits_per_sample == 16:
+        return (frames * (2**15 - 1)).astype('<i2').tobytes()
+    elif bits_per_sample == 24:
+        ints = ((frames * (2**23 - 1)).astype('<i4') << 8).view(np.uint8)
+        return ints.tobytes()
+    else:
+        raise ValueError(f"Invalid bits_per_sample: {bits_per_sample}")
+
+
+def encode_wav(wav: torch.Tensor, path: tp.Union[str, Path], samplerate: int,
+               bits_per_sample: int = 16, as_float: bool = False):
+    """Save the given `[C, T]` float tensor as a wav file, either as 16 / 24 bits PCM,
+    or as float32 (`as_float=True`)."""
+    channels, length = wav.shape
+    if as_float:
+        audio_format = 3  # IEEE float
+        bits_per_sample = 32
+        data = wav.clamp(-1, 1).t().cpu().numpy().astype('<f4').tobytes()
+    else:
+        audio_format = 1  # integer PCM
+        data = _pcm_bytes(wav, bits_per_sample)
+        if bits_per_sample == 24:
+            # Keep only the top 3 bytes of each little-endian int32 sample.
+            data = np.frombuffer(data, dtype=np.uint8).reshape(-1, 4)[:, 1:].tobytes()
+    byte_rate = samplerate * channels * bits_per_sample // 8
+    block_align = channels * bits_per_sample // 8
+    fmt = struct.pack('<HHIIHH', audio_format, channels, samplerate,
+                      byte_rate, block_align, bits_per_sample)
+    chunks = [(b'fmt ', fmt)]
+    if audio_format == 3:
+        chunks.append((b'fact', struct.pack('<I', length)))
+    chunks.append((b'data', data))
+    riff_size = 4 + sum(8 + len(content) for _, content in chunks)
+    with open(path, 'wb') as file:
+        file.write(b'RIFF' + struct.pack('<I', riff_size) + b'WAVE')
+        for name, content in chunks:
+            file.write(name + struct.pack('<I', len(content)))
+            file.write(content)
+
+
+def encode_ffmpeg(wav: torch.Tensor, path: tp.Union[str, Path], samplerate: int,
+                  bits_per_sample: int = 16):
+    """Save the given `[C, T]` float tensor with ffmpeg, in the format given
+    by the extension of `path` (e.g. flac, which sphn can only decode)."""
+    channels, _ = wav.shape
+    input_format = 's16le' if bits_per_sample == 16 else 's32le'
+    command = [
+        'ffmpeg', '-y', '-loglevel', 'error',
+        '-f', input_format, '-ar', str(samplerate), '-ac', str(channels), '-i', '-',
+        str(path)]
+    try:
+        sp.run(command, input=_pcm_bytes(wav, bits_per_sample), check=True)
+    except FileNotFoundError:
+        raise RuntimeError(f"Saving as {Path(path).suffix} requires ffmpeg to be installed.")
+
+
 def prevent_clip(wav, mode='rescale'):
     """
     different strategies for avoiding raw clipping.
@@ -253,14 +313,8 @@ def save_audio(wav: torch.Tensor,
     if suffix == ".mp3":
         encode_mp3(wav, path, samplerate, bitrate, preset, verbose=True)
     elif suffix == ".wav":
-        if as_float:
-            bits_per_sample = 32
-            encoding = 'PCM_F'
-        else:
-            encoding = 'PCM_S'
-        ta.save(str(path), wav, sample_rate=samplerate,
-                encoding=encoding, bits_per_sample=bits_per_sample)
+        encode_wav(wav, path, samplerate, bits_per_sample=bits_per_sample, as_float=as_float)
     elif suffix == ".flac":
-        ta.save(str(path), wav, sample_rate=samplerate, bits_per_sample=bits_per_sample)
+        encode_ffmpeg(wav, path, samplerate, bits_per_sample=bits_per_sample)
     else:
         raise ValueError(f"Invalid suffix for path: {suffix}")

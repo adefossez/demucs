@@ -10,11 +10,10 @@ import logging
 from pathlib import Path
 import typing as tp
 
-from dora.log import fatal, bold
-
 from .hdemucs import HDemucs
 from .repo import RemoteRepo, LocalRepo, ModelOnlyRepo, BagOnlyRepo, AnyModelRepo, ModelLoadingError  # noqa
 from .states import _check_diffq
+from .utils import fatal
 
 logger = logging.getLogger(__name__)
 ROOT_URL = "https://dl.fbaipublicfiles.com/demucs/"
@@ -85,14 +84,29 @@ def get_model(name: str,
     return model
 
 
+def get_model_from_sig(sig: str):
+    """Load the model from a locally trained XP, given its dora signature.
+    This requires the training dependencies (`pip install demucs[train]`) as well
+    as access to the dora folder where the XP was trained."""
+    try:
+        from .train import get_solver_from_sig
+    except ImportError as exc:
+        fatal("Loading a model from a signature requires the training dependencies, "
+              f"install them with `pip install demucs[train]`. Error was: {exc}")
+    solver = get_solver_from_sig(sig, model_only=True)
+    if solver.best_state is not None:
+        solver.model.load_state_dict(solver.best_state)
+    model = solver.model
+    model.eval()
+    return model
+
+
 def get_model_from_args(args):
     """
     Load local model package or pre-trained model.
     """
+    if getattr(args, 'sig', None) is not None:
+        return get_model_from_sig(args.sig)
     if args.name is None:
         args.name = DEFAULT_MODEL
-        print(bold("Important: the default model was recently changed to `htdemucs`"),
-              "the latest Hybrid Transformer Demucs model. In some cases, this model can "
-              "actually perform worse than previous models. To get back the old default model "
-              "use `-n mdx_extra_q`.")
     return get_model(name=args.name, repo=args.repo)

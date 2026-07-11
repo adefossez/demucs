@@ -8,6 +8,7 @@
 benchmarking script, useful to check for OOM, reasonable train time,
 and for the MDX competion, estimate if we will match the time limit."""
 from contextlib import contextmanager
+from fractions import Fraction
 import logging
 import sys
 import time

@@ -9,7 +9,7 @@ This code contains the spectrogram and Hybrid version of Demucs.
 """
 import math
 
-from openunmix.filtering import wiener
+from .wiener import wiener
 import torch
 from torch import nn
 from torch.nn import functional as F

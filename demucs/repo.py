@@ -66,7 +66,7 @@ class RemoteRepo(ModelOnlyRepo):
         except KeyError:
             raise ModelLoadingError(f'Could not find a pre-trained model with signature {sig}.')
         pkg = torch.hub.load_state_dict_from_url(
-            url, map_location='cpu', check_hash=True)  # type: ignore
+            url, map_location='cpu', check_hash=True, weights_only=False)  # type: ignore
         return load_model(pkg)
 
     def list_model(self) -> tp.Dict[str, tp.Union[str, Path]]:
@@ -84,7 +84,7 @@ class LocalRepo(ModelOnlyRepo):
         for file in self.root.iterdir():
             if file.suffix == '.th':
                 if '-' in file.stem:
-                    xp_sig, checksum = file.stem.split('-')
+                    xp_sig, checksum = file.stem.rsplit('-', 1)
                     self._checksums[xp_sig] = checksum
                 else:
                     xp_sig = file.stem
@@ -134,7 +134,8 @@ class BagOnlyRepo:
         except KeyError:
             raise ModelLoadingError(f'{name} is neither a single pre-trained model or '
                                     'a bag of models.')
-        bag = yaml.safe_load(open(yaml_file))
+        with open(yaml_file) as file:
+            bag = yaml.safe_load(file)
         signatures = bag['models']
         models = [self.model_repo.get_model(sig) for sig in signatures]
         weights = bag.get('weights')
@@ -160,7 +161,7 @@ class AnyModelRepo:
             return self.bag_repo.get_model(name_or_sig)
 
     def list_model(self) -> tp.Dict[str, tp.Union[str, Path]]:
-        models = self.model_repo.list_model()
+        models = dict(self.model_repo.list_model())
         for key, value in self.bag_repo.list_model().items():
             models[key] = value
         return models

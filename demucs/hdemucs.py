@@ -10,7 +10,7 @@ from copy import deepcopy
 import math
 import typing as tp
 
-from openunmix.filtering import wiener
+from .wiener import wiener
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -787,7 +787,6 @@ class HDemucs(nn.Module):
         # back to mps device
         if x_is_mps_xpu:
             x = x.to(x_device)
-        
 
         if self.hybrid:
             xt = xt.view(B, S, -1, length)

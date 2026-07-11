@@ -134,7 +134,7 @@ class DConv(nn.Module):
         for d in range(self.depth):
             dilation = 2 ** d if dilate else 1
             padding = dilation * (kernel // 2)
-            mods = [
+            mods: tp.List[nn.Module] = [
                 nn.Conv1d(channels, hidden, kernel, dilation=dilation, padding=padding),
                 norm_fn(hidden), act(),
                 nn.Conv1d(hidden, 2 * channels, 1),

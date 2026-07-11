@@ -2,8 +2,8 @@
 
 ## Install all the dependencies
 
-You should install all the dependencies either with either Anaconda (using the env file `environment-cuda.yml` )
-or `pip`, with `requirements.txt`.
+Install the training dependencies with `pip install "demucs[train]"` (or, from a clone
+of the repository, `uv sync --extra train`).
 
 ## Datasets
 

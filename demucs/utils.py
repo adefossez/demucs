@@ -9,6 +9,7 @@ from concurrent.futures import CancelledError
 from contextlib import contextmanager
 import math
 import os
+import sys
 import tempfile
 import typing as tp
 
@@ -77,12 +78,17 @@ def EMA(beta: float = 1):
     total: tp.Dict[str, float] = defaultdict(float)
 
     def _update(metrics: dict, weight: float = 1) -> dict:
-        nonlocal total, fix
         for key, value in metrics.items():
             total[key] = total[key] * beta + weight * float(value)
             fix[key] = fix[key] * beta + weight
         return {key: tot / fix[key] for key, tot in total.items()}
     return _update
+
+
+def fatal(*args) -> tp.NoReturn:
+    """Print a message to stderr and exit with an error code."""
+    print(*args, file=sys.stderr)
+    sys.exit(1)
 
 
 def sizeof_fmt(num: float, suffix: str = 'B'):

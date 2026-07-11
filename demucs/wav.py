@@ -15,7 +15,6 @@ import tqdm
 
 import musdb
 import julius
-from . import audio_legacy
 import torch as th
 from torch import distributed
 import torchaudio as ta
@@ -41,9 +40,7 @@ def _track_metadata(track, sources, normalize=True, ext=EXT):
                 sub_file = track / f"{sub_source}{ext}"
                 sub_audio, sr = ta.load(sub_file)
                 audio += sub_audio
-            would_clip = audio.abs().max() >= 1
-            if would_clip:
-                assert ta.get_audio_backend() == 'soundfile', 'use dset.backend=soundfile'
+            # Saved as float32 so that summing the sources does not clip.
             ta.save(file, audio, sr, encoding='PCM_F')
 
         try:
@@ -196,10 +193,12 @@ def get_wav_datasets(args, name='wav'):
         metadata_file.parent.mkdir(exist_ok=True, parents=True)
         train = build_metadata(train_path, args.sources)
         valid = build_metadata(valid_path, args.sources)
-        json.dump([train, valid], open(metadata_file, "w"))
+        with open(metadata_file, "w") as file:
+            json.dump([train, valid], file)
     if distrib.world_size > 1:
         distributed.barrier()
-    train, valid = json.load(open(metadata_file))
+    with open(metadata_file) as file:
+        train, valid = json.load(file)
     if args.full_cv:
         kw_cv = {}
     else:
@@ -218,7 +217,8 @@ def _get_musdb_valid():
     # Return musdb valid set.
     import yaml
     setup_path = Path(musdb.__path__[0]) / 'configs' / 'mus.yaml'
-    setup = yaml.safe_load(open(setup_path, 'r'))
+    with open(setup_path) as file:
+        setup = yaml.safe_load(file)
     return setup['validation_tracks']
 
 
@@ -230,10 +230,12 @@ def get_musdb_wav_datasets(args):
     if not metadata_file.is_file() and distrib.rank == 0:
         metadata_file.parent.mkdir(exist_ok=True, parents=True)
         metadata = build_metadata(root, args.sources)
-        json.dump(metadata, open(metadata_file, "w"))
+        with open(metadata_file, "w") as file:
+            json.dump(metadata, file)
     if distrib.world_size > 1:
         distributed.barrier()
-    metadata = json.load(open(metadata_file))
+    with open(metadata_file) as file:
+        metadata = json.load(file)
 
     valid_tracks = _get_musdb_valid()
     if args.train_valid:

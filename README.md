@@ -104,8 +104,12 @@ for more details.
 
 ## Requirements
 
-You will need at least Python 3.8. See `requirements_minimal.txt` for requirements for separation only,
-and `environment-[cpu|cuda].yml` (or `requirements.txt`) if you want to train a new model.
+You will need at least Python 3.10. Installing the `demucs` package (e.g. `pip install demucs`)
+comes with everything needed for separation. To train a new model, install the `train` extra
+(`pip install "demucs[train]"`), and to use the diffq quantized models (e.g. `mdx_q`,
+`mdx_extra_q`), install the `quantized` extra (`pip install "demucs[quantized]"`).
+For development, the repo is managed with [uv](https://docs.astral.sh/uv/): `uv sync --extra train`
+sets up everything, and the `Makefile` targets run through `uv run`.
 
 ### For Windows users
 

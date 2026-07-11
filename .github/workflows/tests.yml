@@ -11,26 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.repository == 'facebookresearch/demucs' || github.event_name == 'workflow_dispatch' }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
+    - uses: actions/checkout@v4
 
-    - uses: actions/cache@v2
+    - uses: astral-sh/setup-uv@v5
       with:
-        path: env
-        key: env-${{ hashFiles('**/requirements.txt', '.github/workflows/*') }}
+        python-version: "3.10"
+        enable-cache: true
+        cache-dependency-glob: pyproject.toml
 
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
-        python3 -m venv env
-        . env/bin/activate
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        uv sync --extra train
 
     - name: Run separation test
-      run: |
-        . env/bin/activate
-        make test_eval
+      run: make test_eval

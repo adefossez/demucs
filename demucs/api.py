@@ -22,11 +22,9 @@ See the end of this module (if __name__ == "__main__")
 
 import subprocess
 
-from . import audio_legacy
+import sphn
 import torch as th
-import torchaudio as ta
 
-from dora.log import fatal
 from pathlib import Path
 from typing import Optional, Callable, Dict, Tuple, Union
 
@@ -34,6 +32,7 @@ from .apply import apply_model, _replace_dict
 from .audio import AudioFile, convert_audio, save_audio
 from .pretrained import get_model, _parse_remote_files, REMOTE_ROOT
 from .repo import RemoteRepo, LocalRepo, ModelOnlyRepo, BagOnlyRepo
+from .utils import fatal
 
 
 class LoadAudioError(Exception):
@@ -213,20 +212,22 @@ class Separator:
         wav = None
 
         try:
-            wav = AudioFile(track).read(streams=0, samplerate=self._samplerate,
-                                        channels=self._audio_channels)
-        except FileNotFoundError:
-            errors["ffmpeg"] = "FFmpeg is not installed."
-        except subprocess.CalledProcessError:
-            errors["ffmpeg"] = "FFmpeg could not read the file."
+            data, sr = sphn.read(str(track))
+        except Exception as err:
+            errors["sphn"] = str(err)
+        else:
+            wav = convert_audio(th.from_numpy(data), int(sr),
+                                self._samplerate, self._audio_channels)
 
         if wav is None:
+            # Fallback on ffmpeg, which supports more formats than sphn.
             try:
-                wav, sr = ta.load(str(track))
-            except RuntimeError as err:
-                errors["torchaudio"] = err.args[0]
-            else:
-                wav = convert_audio(wav, sr, self._samplerate, self._audio_channels)
+                wav = AudioFile(track).read(streams=0, samplerate=self._samplerate,
+                                            channels=self._audio_channels)
+            except FileNotFoundError:
+                errors["ffmpeg"] = "FFmpeg is not installed."
+            except subprocess.CalledProcessError:
+                errors["ffmpeg"] = "FFmpeg could not read the file."
 
         if wav is None:
             raise LoadAudioError(
@@ -266,11 +267,11 @@ class Separator:
         if sr is not None and sr != self.samplerate:
             wav = convert_audio(wav, sr, self._samplerate, self._audio_channels)
         ref = wav.mean(0)
-        wav -= ref.mean()
-        wav /= ref.std() + 1e-8
+        mean = ref.mean()
+        std = ref.std() + 1e-8
         out = apply_model(
                 self._model,
-                wav[None],
+                ((wav - mean) / std)[None],
                 segment=self._segment,
                 shifts=self._shifts,
                 split=self._split,
@@ -283,12 +284,7 @@ class Separator:
                 ),
                 progress=self._progress,
             )
-        if out is None:
-            raise KeyboardInterrupt
-        out *= ref.std() + 1e-8
-        out += ref.mean()
-        wav *= ref.std() + 1e-8
-        wav += ref.mean()
+        out = out * std + mean
         return (wav, dict(zip(self._model.sources, out[0])))
 
     def separate_audio_file(self, file: Path):

@@ -1,0 +1,83 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+# author: adefossez
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "demucs"
+description = "Music source separation in the waveform domain."
+readme = "README.md"
+license = { text = "MIT License" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Alexandre Défossez", email = "defossez@fb.com" },
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dynamic = ["version"]
+# Dependencies required to separate tracks with the pretrained models.
+dependencies = [
+    "einops",
+    "julius>=0.2.3",
+    "lameenc>=1.2",
+    "pyyaml",
+    "sphn>=0.1.12",
+    "torch>=2.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # torch dropped Intel macOS wheels after 2.2 (and torch <2.3 predates numpy 2).
+    "torch>=2.1,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numpy<2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Dependencies required to train a model.
+train = [
+    "dora-search>=0.1.12",
+    "hydra-colorlog>=1.1",
+    "hydra-core>=1.1",
+    "musdb>=0.4.0",
+    "museval",
+    "submitit",
+    "torchaudio>=2.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torchaudio>=2.1,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "treetable",
+]
+# Required to use the diffq quantized models (e.g. mdx_q, mdx_extra_q).
+quantized = [
+    "diffq>=0.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "flake8",
+    "mypy",
+    "safetensors",
+]
+
+[project.urls]
+Homepage = "https://github.com/adefossez/demucs"
+
+[project.scripts]
+demucs = "demucs.separate:main"
+
+[tool.hatch.version]
+path = "demucs/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["demucs"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/env",
+    "/outputs",
+    "/separated",
+]

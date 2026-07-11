@@ -15,7 +15,6 @@ from dora import hydra_main
 import hydra
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
-from . import audio_legacy
 import torch
 from torch import nn
 import torchaudio
@@ -104,11 +103,12 @@ def get_optimizer(model, args):
             weight_decay=args.optim.weight_decay,
         )
     else:
-        raise ValueError("Invalid optimizer %s", args.optim.optimizer)
+        raise ValueError(f"Invalid optimizer {args.optim.optim}")
 
 
 def get_datasets(args):
-    if args.dset.backend:
+    if args.dset.backend and hasattr(torchaudio, 'set_audio_backend'):
+        # Removed in torchaudio 2.2, which always uses the dispatcher mechanism.
         torchaudio.set_audio_backend(args.dset.backend)
     if args.dset.use_musdb:
         train_set, valid_set = get_musdb_wav_datasets(args.dset)

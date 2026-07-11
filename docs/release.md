@@ -2,6 +2,31 @@
 
 ## V4.1.0a, TBD
 
+**Packaging overhaul**: the project now uses `pyproject.toml` with the hatchling build
+backend, and is developed with [uv](https://docs.astral.sh/uv/). The requirements files
+and conda environment files are gone: dependencies are declared in `pyproject.toml`, with
+separation-only dependencies as the base, and `train` / `quantized` extras.
+Minimum supported Python version is now 3.10, and torch 2.1.
+
+**Removed torchaudio for inference**: audio decoding now goes through
+[sphn](https://github.com/kyutai-labs/sphn) with a fallback on ffmpeg for other formats.
+Wav files are written directly (16 / 24 bits PCM or float32), flac encoding goes through
+ffmpeg (which is now required for flac output). torchaudio remains a training-only
+dependency. The Wiener filtering code from Open-Unmix is now vendored (MIT) in
+`demucs.wiener`, removing the `openunmix` dependency.
+
+Checkpoints are loaded with `weights_only=False` for compatibility with torch >= 2.6.
+
+Fixed `-s/--sig` being silently ignored: it now loads the model from the local dora XP.
+
+Many bug fixes following an audit: torch.hub dependency list, local repo checkpoints
+with hyphens in their name, `max_batches` off by one, `Separator.separate_tensor` no
+longer modifies its input in place, error paths raising the wrong exception, aborting
+from a callback now cancels pending chunks.
+
+Added `tools/export_hf.py` to download the released models and prepare HuggingFace
+repositories (one per bag of models), converting checkpoints to safetensors.
+
 Get models list
 
 Check segment of HTDemucs inside BagOfModels
