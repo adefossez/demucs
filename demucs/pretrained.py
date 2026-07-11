@@ -59,9 +59,27 @@ def get_model(name: str,
               repo: tp.Optional[Path] = None):
     """`name` must be a bag of models name or a pretrained signature
     from the remote AWS model repo or the specified local repo if `repo` is not None.
+    Bag of models names are first looked up on the HuggingFace hub, falling back to
+    the legacy AWS repo (in particular for single signatures). Names of the form
+    `hf://[namespace/]name` are always loaded from the HuggingFace hub.
     """
+    if name.startswith('hf://'):
+        from .hf import get_hf_model
+        bag = get_hf_model(name[len('hf://'):])
+        bag.eval()
+        return bag
     if name == 'demucs_unittest':
         return demucs_unittest()
+    if repo is None:
+        from .hf import get_hf_model
+        try:
+            bag = get_hf_model(name)
+        except Exception as exc:
+            logger.debug('Could not load %s from the HuggingFace hub (%r), '
+                         'falling back to the legacy remote repo.', name, exc)
+        else:
+            bag.eval()
+            return bag
     model_repo: ModelOnlyRepo
     if repo is None:
         models = _parse_remote_files(REMOTE_ROOT / 'files.txt')

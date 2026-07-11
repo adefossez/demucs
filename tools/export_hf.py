@@ -16,14 +16,13 @@ For each named model (e.g. `htdemucs_ft`), the output folder contains:
 Quantized checkpoints (diffq, e.g. `mdx_q`) hold a nested structure of bit-packed int64
 tensors and scales rather than a plain state dict: the tensors are stored as-is in the
 safetensors file, and the nesting is recorded as json under the `structure` metadata key
-(see `_flatten_state` / `_unflatten_state`).
+(see `_flatten_state` here, and its inverse `demucs.hf._unflatten_state`).
 
 Example:
     uv run tools/export_hf.py --models htdemucs htdemucs_ft --out release_hf --check
 """
 import argparse
 from fractions import Fraction
-import importlib
 import json
 from pathlib import Path
 import shutil
@@ -32,6 +31,7 @@ import sys
 import torch
 import yaml
 
+from demucs.hf import hf_repo_name
 from demucs.pretrained import REMOTE_ROOT, ROOT_URL, _parse_remote_files  # noqa
 
 
@@ -70,27 +70,6 @@ def _flatten_state(state):
 
     structure = flatten(state, "state")
     return tensors, structure
-
-
-def _unflatten_state(tensors, structure):
-    """Inverse of `_flatten_state`."""
-    def unflatten(node):
-        if isinstance(node, dict):
-            if "_tensor" in node:
-                return tensors[node["_tensor"]]
-            elif "_dict" in node:
-                return {key: unflatten(item) for key, item in node["_dict"]}
-            elif "_list" in node:
-                return [unflatten(item) for item in node["_list"]]
-            elif "_tuple" in node:
-                return tuple(unflatten(item) for item in node["_tuple"])
-            elif "_class" in node:
-                module, name = node["_class"].rsplit(".", 1)
-                return getattr(importlib.import_module(module), name)
-            else:
-                raise ValueError(f"Invalid structure node {node}.")
-        return node
-    return unflatten(structure)
 
 
 def download_checkpoint(url: str, cache: Path) -> Path:
@@ -138,25 +117,10 @@ def convert_checkpoint(checkpoint: Path, sig: str, out: Path) -> str:
 def check_conversion(checkpoint: Path, sig: str, out: Path):
     """Reload the converted file and check it restores the exact same model
     as the original torch checkpoint."""
-    from safetensors import safe_open
+    from demucs.hf import load_safetensors_model
     from demucs.states import load_model
 
-    with safe_open(out / f"{sig}.safetensors", framework="pt") as file:
-        metadata = file.metadata()
-        tensors = {key: file.get_tensor(key) for key in file.keys()}
-    if 'structure' in metadata:
-        state = _unflatten_state(tensors, json.loads(metadata['structure']))
-    else:
-        state = tensors
-    module, name = metadata['klass'].rsplit(".", 1)
-    klass = getattr(importlib.import_module(module), name)
-    kwargs = json.loads(metadata['kwargs'])
-    if isinstance(kwargs.get('segment'), dict):  # fraction
-        kwargs['segment'] = Fraction(kwargs['segment']['numerator'],
-                                     kwargs['segment']['denominator'])
-    model = load_model({'klass': klass, 'args': json.loads(metadata['args']),
-                        'kwargs': kwargs, 'state': state})
-
+    model = load_safetensors_model(out / f"{sig}.safetensors")
     reference = load_model(torch.load(checkpoint, 'cpu', weights_only=False))
     ref_state = reference.state_dict()
     new_state = model.state_dict()
@@ -175,19 +139,19 @@ tags:
 - demucs
 ---
 
-# {name}
+# {repo_name}
 
-`{name}` pretrained model from [Demucs](https://github.com/adefossez/demucs),
-music source separation in the waveform domain.
+Weights for the `{name}` pretrained model of
+[Demucs](https://github.com/adefossez/demucs), music source separation in the
+waveform domain. See the [demucs repository](https://github.com/adefossez/demucs)
+for how to use them.
 
-This is a bag of {count} model(s), applied to the input mix and averaged:
+This is a bag of {count} model(s), whose outputs are averaged (see `{name}.yaml`
+for the per source weights). Each `.safetensors` file contains the weights of one
+model, with its class and init arguments as json in the safetensors metadata, and
+the full training metadata in the matching `.json` sidecar.
 
 {table}
-
-Each `.safetensors` file contains the model weights, along with the model class and
-its init arguments as json in the safetensors metadata (see the `.json` sidecars for
-the full training metadata). The `{name}.yaml` file describes how the models are
-combined (per source weights and evaluation segment length).
 """
 
 
@@ -203,6 +167,12 @@ def main():
     parser.add_argument('--check', action='store_true',
                         help='Reload each converted model and check it is identical '
                              'to the one from the original checkpoint.')
+    parser.add_argument('--upload', action='store_true',
+                        help='Upload each prepared folder to HuggingFace.')
+    parser.add_argument('--namespace', default='adefossez',
+                        help='HuggingFace namespace to upload to (default: adefossez).')
+    parser.add_argument('--private', action='store_true',
+                        help='Create the HuggingFace repositories as private.')
     args = parser.parse_args()
 
     cache = args.cache or Path(torch.hub.get_dir()) / 'checkpoints'
@@ -236,17 +206,30 @@ def main():
             if args.check:
                 check_conversion(checkpoint, sig, repo)
             rows.append(f"- `{sig}` (`{weights_name}`)")
+        repo_name = hf_repo_name(name)
         (repo / 'README.md').write_text(MODEL_CARD.format(
-            name=name, count=len(bag['models']), table="\n".join(rows)))
+            repo_name=repo_name, name=name, count=len(bag['models']),
+            table="\n".join(rows)))
         print(f"  Wrote {repo}")
+        if args.upload:
+            from huggingface_hub import HfApi
+            api = HfApi()
+            repo_id = f"{args.namespace}/{repo_name}"
+            api.create_repo(repo_id, repo_type='model', private=args.private,
+                            exist_ok=True)
+            api.upload_folder(folder_path=repo, repo_id=repo_id, repo_type='model')
+            print(f"  Uploaded to https://huggingface.co/{repo_id}")
 
     if args.models is None:
         leftover = sorted(set(urls) - used_sigs)
         if leftover:
             print(f"Note: {len(leftover)} remote checkpoints are not referenced by any "
                   f"bag yaml and were not exported: {', '.join(leftover)}")
-    print(f"Done. Repositories are in {args.out}, upload them with e.g.\n"
-          f"    hf upload <namespace>/<name> {args.out}/<name>")
+    if args.upload:
+        print(f"Done. Repositories are in {args.out} and uploaded.")
+    else:
+        print(f"Done. Repositories are in {args.out}, rerun with --upload "
+              "to push them to HuggingFace.")
 
 
 if __name__ == '__main__':

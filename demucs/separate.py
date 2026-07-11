@@ -154,7 +154,8 @@ def main(opts=None):
                 stem=args.stem, sources=", ".join(separator.model.sources)
             )
         )
-    out = args.out / args.name
+    # e.g. for `-n hf://someuser/somemodel`, use `someuser_somemodel` as the folder name.
+    out = args.out / args.name.replace('hf://', '').replace('/', '_')
     out.mkdir(parents=True, exist_ok=True)
     print(f"Separated tracks will be stored in {out.resolve()}")
     for track in args.tracks:

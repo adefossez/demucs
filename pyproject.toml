@@ -27,9 +27,11 @@ dynamic = ["version"]
 # Dependencies required to separate tracks with the pretrained models.
 dependencies = [
     "einops",
+    "huggingface-hub",
     "julius>=0.2.3",
     "lameenc>=1.2",
     "pyyaml",
+    "safetensors",
     "sphn>=0.1.12",
     "torch>=2.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # torch dropped Intel macOS wheels after 2.2 (and torch <2.3 predates numpy 2).
@@ -60,7 +62,6 @@ quantized = [
 dev = [
     "flake8",
     "mypy",
-    "safetensors",
 ]
 
 [project.urls]

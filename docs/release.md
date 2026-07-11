@@ -24,8 +24,11 @@ with hyphens in their name, `max_batches` off by one, `Separator.separate_tensor
 longer modifies its input in place, error paths raising the wrong exception, aborting
 from a callback now cancels pending chunks.
 
-Added `tools/export_hf.py` to download the released models and prepare HuggingFace
-repositories (one per bag of models), converting checkpoints to safetensors.
+**Pretrained models are now hosted on the HuggingFace hub** (as safetensors, including
+the diffq quantized ones, prepared with the new `tools/export_hf.py`). `get_model` first
+looks up bag of models names on the hub, falling back to the legacy AWS repo (single
+signatures still come from there). Names of the form `hf://[namespace/]name` force
+loading from the hub, e.g. `demucs -n hf://someuser/htdemucs`.
 
 Get models list
 
