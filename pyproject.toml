@@ -16,7 +16,7 @@ readme = "README.md"
 license = { text = "MIT License" }
 requires-python = ">=3.10"
 authors = [
-    { name = "Alexandre Défossez", email = "defossez@fb.com" },
+    { name = "Alexandre Défossez", email = "alexandre.defossez@gmail.com" },
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",

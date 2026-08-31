@@ -52,6 +52,7 @@ width="800px"></p>
 
 See the [release notes](./docs/release.md) for more details.
 
+- 11/07/2026: Released Demucs v4.1.0 with modernized packaging, lighter inference dependencies, numerous fixes, and pretrained models hosted on Hugging Face.
 - 22/02/2023: added support for the [SDX 2023 Challenge](https://www.aicrowd.com/challenges/sound-demixing-challenge-2023),
     see the dedicated [doc page](./docs/sdx23.md)
 - 07/12/2022: Demucs v4 now on PyPI. **htdemucs** model now used by default. Also releasing

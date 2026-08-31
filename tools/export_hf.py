@@ -131,7 +131,6 @@ def check_conversion(checkpoint: Path, sig: str, out: Path):
 
 
 MODEL_CARD = """---
-license: mit
 tags:
 - audio
 - music
